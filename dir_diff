@@ -1,0 +1,148 @@
+#!/bin/sh
+#
+# 名称
+#    dir_diff - 2つのディレクトリ構成を比較する
+#
+# 書式
+#    dif_diff [-v] 課題番号(1 or 2)
+#
+# 解説
+#    指定した2つのディレクトリ構成を比較し、
+#    等しくないファイルをリスト表示する。
+#    以下の3パターンの表示を行う。
+#
+#     1.1番目のディレクトリ下にあって、2番目のディレクトリ下にはないファイル
+#     2.2番目のディレクトリ下にあって、1番目のディレクトリ下にはないファイル
+#
+#    -v  詳細表示オプション
+#        2つのディレクトリ下に同じ名称のファイルがあって、その中身が異なって
+#        いるとき、ファイルの何行目がどのように違っているのかを表示する。
+#
+# 戻り値
+#    0  2つのディレクトリのファイル構成が等しい時
+#    1  使用法の誤りか、何らかのエラーで終了した時
+#    2  2つのディレクトリ構成が異なっていた時
+#
+#
+# 参考資料URL
+#    https://blog1.mammb.com/entry/20091112/1258039207
+#
+###############################################################################
+CMDNAME=`basename $0`
+USAGE="Usage: $CMDNAME [-v] 課題番号(1 or 2)"
+
+CURDIR=`pwd`
+DIR1="./submission"
+DIR2=
+DIR1_FILES=/tmp/files1.$$
+DIR1_DIRS=/tmp/dirs1.$$
+DIR2_FILES=/tmp/files2.$$
+DIR2_DIRS=/tmp/dirs2.$$
+ALL_FILES=/tmp/allfiles.$$
+TMP=/tmp/tmp.$$
+FOUND=FALSE
+VERBOSE=FALSE
+ESC=$(printf '\033')
+
+# 以下のシグナルを検知したら実行
+# 1 → 制御端末のハングアップ検出、または制御しているプロセスの死
+# 2 → interrupt(cmd+c等)
+# 3 → quit
+# 15 →終了
+trap `rm -f /tmp/*.$$; exit 1`    1 2 3 15
+
+#
+# オプション処理
+#
+while :
+do
+    case $1 in
+        -v) VERBOSE=TRUE
+            shift
+            ;;
+        --) shift
+            break
+            ;;
+        -*) echo "$USAGE" 1>&2
+            exit 1
+            ;;
+        *)  break
+            ;;
+    esac
+done
+
+#
+# コマンド行に指定された引数のチェック
+#
+if [ $1 = 1 ]; then
+    echo "課題1チェック開始..."
+    DIR2="./answer/one"
+elif [ $1 = 2 ]; then
+    echo "課題2チェック開始..."
+    DIR2="./answer/two"
+else
+    echo "$USAGE" 1>&2
+    exit 1
+fi
+
+#
+# ディレクトリチェック(今回あまり必要ないかも...)
+#
+if [ ! -d $DIR1 ]; then
+    echo "$DIR1 is not a directory." 1>&2
+    exit 1
+fi
+if [ ! -d $DIR2 ]; then
+    echo "$DIR2 is not a directory." 1>&2
+fi
+
+#
+# 各ディレクトリ配下に存在するディレクトリ、ファイルパスをtmpファイルに出力
+#
+cd $DIR1
+find . \( -type f -o -type l \) -print | sort > $DIR1_FILES
+find . \( -type d \) -print | sort > $DIR1_DIRS
+cd $CURDIR
+
+cd $DIR2
+find . \( -type f -o -type l \) -print | sort > $DIR2_FILES
+find . \( -type d \) -print | sort > $DIR2_DIRS
+cd $CURDIR
+
+cat $DIR1_FILES $DIR1_DIRS $DIR2_FILES $DIR2_DIRS | sort | uniq    > $ALL_FILES
+
+echo "\n不足ディレクトリ、ファイル検出中..."
+cat $DIR1_FILES $DIR1_DIRS $ALL_FILES | sort | uniq -u > $TMP
+if [ -s $TMP ]; then
+    FOUND=TRUE
+    echo "${ESC}[31mディレクトリ、ファイルが足りません。${ESC}[m"
+    for f in `cat $TMP`
+    do
+        if [ $f != "." ]; then
+            f=`expr $f : '..\(.*\)'`
+            echo "Missing => $f"
+        fi
+    done
+fi
+
+echo "\n余分ディレクトリ、ファイル検出中..."
+cat $DIR2_FILES $DIR2_DIRS $ALL_FILES | sort | uniq -u > $TMP
+if [ -s $TMP ]; then
+    FOUND=TRUE
+    echo "${ESC}[31mディレクトリ、ファイルが余分です。${ESC}[m"
+    for f in `cat $TMP`
+    do
+        if [ $f != "." ]; then
+            f=`expr $f : '..\(.*\)'`
+            echo "Extra => $f"
+        fi
+    done
+fi
+
+rm -f /tmp/*.$$
+if [ $FOUND = TRUE ]; then
+    exit 2
+else
+    echo "\n${ESC}[32m差分なし。合格！！！${ESC}[m"
+    exit 0
+fi
