@@ -6,10 +6,12 @@ Show diff between answer and submission
 2. 課題番号に応じ以下コマンド実行
 
 ```sh
-課題1
+$ cd /path/to/dir_diff
+
+# 課題1
 $ ./dir_diff 1
 
-課題2
+# 課題2
 $ ./dir_diff ２
 ```
 
